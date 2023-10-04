@@ -16,7 +16,7 @@ class companyAPIView(APIView):
         else:
             company = Companies.objects.filter(company_id=company_id)
             serializer = companySerializer(company)
-            return serializer.data
+            return Response(serializer.data)
             
 
             

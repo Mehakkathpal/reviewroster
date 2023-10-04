@@ -9,7 +9,10 @@ urlpatterns = [
      path('stripe-balance/',views.get_balance),
      path('session-checkout/',views.create_checkout_session),
      path('subscription_status/',views.subscriptionStatusView.as_view()),
-     path('success_view/',views.success_view)
+     path('success_view/',views.success_view),
+     path('create-payment/',views.create_payment),
+     path('show-webhook/',views.webhook),
+     path('cancel-subscription',views.cancel_subscription)
 ]
 
 

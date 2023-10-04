@@ -12,61 +12,76 @@ from .serializers import subscriptionStatusserializer
 from django.http import HttpResponse
 
 
-stripe.api_key = ""
+
+stripe.api_key = 'sk_live_'
+
 
 class subscriptionStatusView(APIView):
-    def get(self,request):
+    def get(self, request):
         data = request.data
-        customer_email = data.get("email",None)
-        if(customer_email is None):
-            customers_subscriptions  =  subscriptionStatus.objects.all()
-            serializer = subscriptionStatusserializer(customers_subscriptions,many=True)
-            return(Response(serializer.data))
+        customer_email = data.get("email", None)
+        if customer_email is None:
+            customers_subscriptions = subscriptionStatus.objects.all()
+            serializer = subscriptionStatusserializer(
+                customers_subscriptions, many=True
+            )
+            return Response(serializer.data)
         else:
-            customer_subscriptions = subscriptionStatus.objects.filter(customer_email = customer_email)
+            customer_subscriptions = subscriptionStatus.objects.filter(
+                customer_email=customer_email
+            )
             serializer = subscriptionStatusserializer(customers_subscriptions)
-            return(Response(serializer.data))
-    def post(self,request):
+            return Response(serializer.data)
+
+    def post(self, request):
         data = request.data
         serializer = subscriptionStatusserializer(data=data)
-        if(serializer.is_valid()):
+        if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 @api_view(["POST"])
 def get_subscription_status(request):
-  data = request.data
-  email = data.get("email")
-  subscribed=False
-  customers = subscriptionStatus.objects.filter(customer_email=email)
-  if(customers):
-    subscribed = True
-  else:
-    product_id = "price_1NpQWSSHdkZh1gwbcpAYswOX"
-    customers = stripe.Customer.list()
-    for customer in customers.auto_paging_iter():
-        if customer.email == email:
-            subscriptions = stripe.Subscription.list(customer=customer.id)
-            for subscription in subscriptions.auto_paging_iter():
-                if(subscription.plan.id == product_id):
-                    subscribed=True
-                    break
-  return JsonResponse({'subscribed':subscribed})
+    data = request.data
+    email = data.get("email")
+    subscribed = False
+    sub_id = None
+    customers = subscriptionStatus.objects.filter(customer_email=email)
+    if customers:
+        subscribed = True
+    else:
+        product_id = "price_1NuGdbSHdkZh1gwbKsnTeKEf"
+        product_id="price_1NuGdbSHdkZh1gwbKsnTeKEf"
+        customers = stripe.Customer.list()
+        for customer in customers.auto_paging_iter():
+            if customer.email == email:
+                subscriptions = stripe.Subscription.list(customer=customer.id)
+                for subscription in subscriptions.auto_paging_iter():
+                    sub_id = subscription.id
+                    if subscription.plan.id == product_id:
+                        subscribed = True
+                        break
+    return JsonResponse({"subscribed": subscribed,"subscription_id":sub_id})
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 def success_view(request):
     data = request.data
-    session_id = data.get('session_id')
+    session_id = data.get("session_id")
     try:
         checkout_session = stripe.checkout.Session.retrieve(session_id)
         customer_email = checkout_session.customer_details.email
         customers = subscriptionStatus.objects.filter(customer_email=customer_email)
-        if(len(customers) == 0):
-            customer_id = checkout_session.get('customer')
-            subscription_data = {'customer_email': customer_email, 'customer_id': customer_id, "is_subscibed": True}
+        if len(customers) == 0:
+            customer_id = checkout_session.get("customer")
+            subscription_data = {
+                "customer_email": customer_email,
+                "customer_id": customer_id,
+                "is_subscibed": True,
+            }
             serializer = subscriptionStatusserializer(data=subscription_data)
             if serializer.is_valid():
                 serializer.save()
@@ -74,28 +89,40 @@ def success_view(request):
             else:
                 return HttpResponse({"Error": serializer.errors})
         else:
-            return HttpResponse({"message":"Record already exist"})
+            return HttpResponse({"message": "Record already exist"})
     except Exception as e:
         return HttpResponse({"Error": str(e)})
 
 
 @api_view(["POST"])
 def create_payment_intent(request):
-        data = request.data
-        customer_id = data.get("customerId")
-        payment_method_id = data["payment_method_id"]
-        payment_intent = stripe.PaymentIntent.create(
-                amount=1000,
-                currency="inr",
-                payment_method_types=["card"],
-                customer=customer_id,
-                payment_method=payment_method_id,
-                confirm=True,
-                setup_future_usage="off_session", 
-            )
-        if payment_intent.status == "requires_action" and payment_intent.next_action.type == "use_stripe_sdk":
-            return JsonResponse({"requires_action": True, "payment_intent_client_secret": payment_intent.client_secret,
-            "payment_method_id":payment_method_id,"customer_id":customer_id})
+    data = request.data
+    customer_id = data.get("customerId")
+    payment_method_id = data["payment_method_id"]
+    amount = data["amount"]
+    print(amount)
+    payment_intent = stripe.PaymentIntent.create(
+        amount=int(amount)*100,
+        currency="inr",
+        payment_method_types=["card"],
+        customer=customer_id,
+        payment_method=payment_method_id,
+        confirm=True,
+        setup_future_usage="off_session",
+    )
+    if (
+        payment_intent.status == "requires_action"
+        and payment_intent.next_action.type == "use_stripe_sdk"
+    ):
+        return JsonResponse(
+            {
+                "requires_action": True,
+                "payment_intent_client_secret": payment_intent.client_secret,
+                "payment_method_id": payment_method_id,
+                "customer_id": customer_id,
+            }
+        )
+
 
 @api_view(["POST"])
 def save_stripe_info(request):
@@ -105,8 +132,7 @@ def save_stripe_info(request):
     extra_msg = ""
     customer_data = stripe.Customer.list(email=email).data
     if len(customer_data) == 0:
-        customer = stripe.Customer.create(email=email, payment_method=payment_method_id)
-
+        customer = stripe.Customer.create(email=email)
     else:
         customer = customer_data[0]
         extra_msg = "Card Details already Saved."
@@ -120,53 +146,113 @@ def save_stripe_info(request):
         },
     )
 
+
 @api_view(["POST"])
 def process_payment(request):
     if request.method == "POST":
         data = request.data
         token = data["token"]
         customer_id = data.get("customerID")
-        intent_id = data.get("intentid")
         payment_method_id = data["payment_method_id"]
         try:
-            # stripe.PaymentIntent.confirm(intent_id)
-            stripe.PaymentMethod.attach(payment_method_id, customer=customer_id)
+            # Create a Payment Intent with 3DS authentication
+            # Attach the payment method to the customer
+            # stripe.PaymentMethod.attach(payment_method_id, customer=customer_id)
+
+            # Create the subscription
             subscription = stripe.Subscription.create(
-            customer=customer_id,
-                    items=[
-                        {
-                            "price": "price_1NpQWSSHdkZh1gwbcpAYswOX",
-                        },
-                    ],
-                      payment_behavior='default_incomplete',
-            expand=['latest_invoice.payment_intent'],
-                )
-            return JsonResponse({"success": subscription,"subscriptionId":subscription.id, "clientSecret":subscription.latest_invoice.payment_intent.client_secret})
+                customer=customer_id,
+                items=[
+                    {"price": "price_1NuGdbSHdkZh1gwbKsnTeKEf"},
+                ],
+                payment_behavior="default_incomplete",
+                expand=["latest_invoice.payment_intent"],
+            )
+
+            return JsonResponse(
+                {
+                    "success": subscription,
+                    "subscriptionId": subscription.id,
+                    "clientSecret": subscription.latest_invoice.payment_intent.client_secret,
+                }
+            )
         except stripe.error.StripeError as e:
             return JsonResponse({"success": False, "error": str(e)})
     return JsonResponse({"success": False, "error": "Invalid request method"})
 
-@api_view(['GET'])
+
+@api_view(["GET"])
 def create_checkout_session(request):
     YOUR_DOMAIN = "http://localhost:3000"  # Replace with your actual domain
 
     try:
         checkout_session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=[{
-                "price": "price_1NpQWSSHdkZh1gwbcpAYswOX",
-                'quantity': 1,
-            }],
-            mode='subscription',
-            success_url=YOUR_DOMAIN + '/success?session_id={CHECKOUT_SESSION_ID}',
-            cancel_url=YOUR_DOMAIN + '/canceled',
+            payment_method_types=["card"],
+            line_items=[
+                {
+                    "price": "price_1NuGdbSHdkZh1gwbKsnTeKEf",
+                    "quantity": 1,
+                }
+            ],
+            mode="subscription",
+            success_url=YOUR_DOMAIN + "/success?session_id={CHECKOUT_SESSION_ID}",
+            cancel_url=YOUR_DOMAIN + "/canceled",
         )
-        return JsonResponse({'checkout_session_url':checkout_session.url})
+        return JsonResponse({"checkout_session_url": checkout_session.url})
     except Exception as e:
-        return JsonResponse({'error': str(e)})
+        return JsonResponse({"error": str(e)})
 
 
-
-@api_view(['GET'])
+@api_view(["GET"])
 def get_balance(request):
-    return JsonResponse({"Balance":stripe.Balance.retrieve()})
+    ls = stripe.PaymentMethod.attach(
+        "pm_1Ns1qCSHdkZh1gwbNGM7kzLo",
+        customer="cus_OfMQTc8dI7I3gA",
+    )
+
+    return JsonResponse(ls)
+
+
+@api_view(["POST"])
+def create_payment(request):
+    if request.method == "POST":
+        data = request.data
+        token = data.get("customerId")
+        payment_method_id = data["payment_method_id"]
+        customer_id = data.get("customerId")
+        try:
+            payment_intent = stripe.PaymentIntent.create(
+                amount=1000,
+                currency="inr",
+                payment_method_types=["card"],
+                customer=customer_id,
+                payment_method=payment_method_id,
+                confirm=True,
+                setup_future_usage="off_session",
+            )
+            return HttpResponse(payment_intent)
+        except stripe.error.StripeError as e:
+            print(str(e))
+            return HttpResponse({"error": str(e)})
+
+
+@api_view(['POST'])
+def webhook(request):
+    payload = request.data
+    # sig_header = request.header['STRIPE_SIGNATURE']
+    print(payload)
+
+@api_view(['POST'])
+def cancel_subscription(request):
+    data = request.data
+    subscription_id = data["subscription_id"]
+    success = False
+    canceled_subscription = stripe.Subscription.delete(subscription_id)
+    if canceled_subscription.status == "canceled":
+        success=True
+        return HttpResponse({"success":success})
+    else:
+        return HttpResponse({"success":success})
+
+    
+    

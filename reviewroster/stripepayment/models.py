@@ -17,10 +17,10 @@ class AddSubscriptionStatus(models.Model):
 
 
 
-@receiver(post_save)
-def create_subscription_status(sender,instance,**kwargs):
-        if(kwargs.get("created")):
-            AddSubscriptionStatus.objects.create(customer_email=instance)
+# @receiver(post_save)
+# def create_subscription_status(sender,instance,**kwargs):
+#         if(kwargs.get("created")):
+#             AddSubscriptionStatus.objects.create(customer_email=instance)
 
 
 

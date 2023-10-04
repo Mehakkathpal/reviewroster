@@ -20,5 +20,5 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("premium/",include('premiumfeature.urls')),
     path("payment/",include('stripepayment.urls')),
-
+    path("fee/",include("feemanagement.urls")),
 ]
